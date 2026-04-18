@@ -55,7 +55,7 @@ Feature: Scaffold WP-CLI commands
     And the {PACKAGE_PATH}/local/wp-cli/foo/LICENSE file should exist
     And the {PACKAGE_PATH}/local/wp-cli/foo/LICENSE file should contain:
       """
-      The MIT License (MIT)
+      MIT License
       """
     And the {PACKAGE_PATH}/local/wp-cli/foo/LICENSE file should contain:
       """
@@ -124,6 +124,38 @@ Feature: Scaffold WP-CLI commands
       """
       Success: Uninstalled package.
       """
+
+  Scenario: Scaffold a WP-CLI command with a specific OSS license
+    Given an empty directory
+
+    When I run `wp scaffold package wp-cli/gpl-package --dir=gpl-package --skip-tests --skip-github --skip-install --license=GPL-2.0`
+    Then STDOUT should contain:
+      """
+      Success: Created package files
+      """
+    And the gpl-package/composer.json file should contain:
+      """
+      "license": "GPL-2.0",
+      """
+    And the gpl-package/LICENSE file should exist
+    And the gpl-package/LICENSE file should contain:
+      """
+      GNU GENERAL PUBLIC LICENSE
+      """
+
+  Scenario: Scaffold a WP-CLI command without a license file
+    Given an empty directory
+
+    When I run `wp scaffold package wp-cli/no-license --dir=no-license --skip-tests --skip-github --skip-install --license=none`
+    Then STDOUT should contain:
+      """
+      Success: Created package files
+      """
+    And the no-license/composer.json file should contain:
+      """
+      "license": "proprietary",
+      """
+    And the no-license/LICENSE file should not exist
 
   Scenario: Scaffold a package with an invalid name
     Given an empty directory

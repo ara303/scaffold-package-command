@@ -118,6 +118,8 @@ class ScaffoldPackageCommand {
 			$assoc_args['homepage'] = 'https://github.com/' . $assoc_args['name'];
 		}
 
+		$assoc_args['license'] = $this->get_composer_license( Utils\get_flag_value( $assoc_args, 'license', 'MIT' ) );
+
 		$force = Utils\get_flag_value( $assoc_args, 'force' );
 
 		$package_root  = dirname( __DIR__ );
@@ -133,8 +135,6 @@ EOT;
 				"{$package_dir}/.editorconfig"             => file_get_contents( "{$package_root}/.editorconfig" ),
 				"{$package_dir}/.distignore"               => file_get_contents( "{$package_root}/.distignore" ),
 				"{$package_dir}/phpcs.xml.dist"            => Utils\mustache_render( "{$template_path}/phpcs.xml.dist.mustache", $assoc_args ),
-				"{$package_dir}/CONTRIBUTING.md"           => file_get_contents( "{$package_root}/CONTRIBUTING.md" ),
-				"{$package_dir}/LICENSE"                   => Utils\mustache_render( "{$template_path}/LICENSE.mustache", $assoc_args ),
 				"{$package_dir}/wp-cli.yml"                => $wp_cli_yml,
 				"{$package_dir}/hello-world-command.php"   => Utils\mustache_render( "{$template_path}/hello-world-command.mustache", $assoc_args ),
 				"{$package_dir}/src/HelloWorldCommand.php" => Utils\mustache_render( "{$template_path}/HelloWorldCommand.mustache", $assoc_args ),
@@ -142,6 +142,18 @@ EOT;
 			],
 			$force
 		);
+
+		if ( ! self::should_skip_license( $assoc_args['license'] ) ) {
+			$files_written = array_merge(
+				$files_written,
+				$this->create_files(
+					[
+						"{$package_dir}/LICENSE" => $this->render_license_template( $template_path, $assoc_args['license'], $this->get_license_template_args( $assoc_args['name'], $assoc_args ) ),
+					],
+					$force
+				)
+			);
+		}
 
 		if ( empty( $files_written ) ) {
 			WP_CLI::log( 'All package files were skipped.' );
@@ -151,6 +163,7 @@ EOT;
 
 		$force_flag         = $force ? '--force' : '';
 		$quoted_package_dir = escapeshellarg( $package_dir );
+		$license_flag       = '--license=' . escapeshellarg( $assoc_args['license'] );
 
 		if ( ! Utils\get_flag_value( $assoc_args, 'skip-tests' ) ) {
 			WP_CLI::runcommand( "scaffold package-tests {$quoted_package_dir} {$force_flag}", array( 'launch' => false ) );
@@ -166,7 +179,7 @@ EOT;
 		}
 
 		if ( ! Utils\get_flag_value( $assoc_args, 'skip-readme' ) ) {
-			WP_CLI::runcommand( "scaffold package-readme {$quoted_package_dir} {$force_flag}", array( 'launch' => false ) );
+			WP_CLI::runcommand( "scaffold package-readme {$quoted_package_dir} {$force_flag} {$license_flag}", array( 'launch' => false ) );
 		}
 
 		// Display next steps guidance for users.
@@ -303,7 +316,7 @@ EOT;
 			'has_commands'                  => false,
 			'wp_cli_update_to_instructions' => 'the latest stable release with `wp cli update`',
 			'show_powered_by'               => isset( $composer_obj['extra']['readme']['show_powered_by'] ) ? (bool) $composer_obj['extra']['readme']['show_powered_by'] : true,
-			'license'                       => $assoc_args['license'],
+			'license'                       => $this->get_effective_license( $assoc_args, $composer_obj ),
 		];
 
 		if ( isset( $composer_obj['extra']['readme']['shields'] ) ) {
@@ -526,14 +539,24 @@ EOT;
 			}
 		}
 
-		$files_written = $this->create_files(
-			[
-				"{$package_dir}/README.md" => Utils\mustache_render( "{$template_path}/readme.mustache", $readme_args ),
-			],
-			$force
-		);
+		$files_to_create = [
+			"{$package_dir}/README.md" => Utils\mustache_render( "{$template_path}/readme.mustache", $readme_args ),
+		];
+		if ( ! self::should_skip_license( $license ) ) {
+			$files_to_create["{$package_dir}/LICENSE"] = $this->render_license_template( $template_path, $license, $this->get_license_template_args( $composer_obj['name'], $composer_obj ) );
+		}
 
-		if ( empty( $files_written ) ) {
+		$files_written = $this->create_files( $files_to_create, $force );
+		$license_path  = "{$package_dir}/LICENSE";
+		$license_deleted = false;
+		if ( self::should_skip_license( $license ) ) {
+			$license_deleted = $this->delete_file( $license_path );
+		}
+
+		$readme_written = in_array( "{$package_dir}/README.md", $files_written, true );
+		$license_written = in_array( $license_path, $files_written, true );
+
+		if ( ! $readme_written && ! $license_written && ! $license_deleted ) {
 			WP_CLI::log( 'Package readme generation skipped.' );
 		} else {
 			WP_CLI::success( 'Created package readme.' );
@@ -877,6 +900,79 @@ EOT;
 			}
 		}
 		return implode( "\n", $lines );
+	}
+
+	private function render_license_template( $template_path, $license, $context ) {
+		$license_template = $this->get_license_template_path( $template_path, $license );
+
+		return Utils\mustache_render( $license_template, $context );
+	}
+
+	private function get_license_template_path( $template_path, $license ) {
+		$license_template = $template_path . 'licenses/' . self::normalize_license_identifier( $license ) . '.mustache';
+
+		if ( ! file_exists( $license_template ) ) {
+			WP_CLI::error( "License template not found for '{$license}'." );
+		}
+
+		return $license_template;
+	}
+
+	private function get_effective_license( $assoc_args, $composer_obj ) {
+		if ( self::has_explicit_assoc_arg( 'license' ) ) {
+			return $this->get_composer_license( (string) Utils\get_flag_value( $assoc_args, 'license', 'MIT' ) );
+		}
+
+		$license = ! empty( $composer_obj['license'] ) ? $composer_obj['license'] : 'MIT';
+
+		return 'proprietary' === self::normalize_license_identifier( $license ) ? 'none' : $license;
+	}
+
+	private function get_composer_license( $license ) {
+		return self::should_skip_license( $license ) ? 'proprietary' : (string) $license;
+	}
+
+	private function get_license_template_args( $name, $package ) {
+		return [
+			'name'             => $name,
+			'year'             => gmdate( 'Y' ),
+			'project_name'     => $name,
+			'copyright_holder' => $name . ' Contributors',
+			'homepage'         => isset( $package['homepage'] ) ? $package['homepage'] : '',
+		];
+	}
+
+	private static function has_explicit_assoc_arg( $key ) {
+		/**
+		 * @var array{argv: array<string,string>} $GLOBALS
+		 */
+		foreach ( $GLOBALS['argv'] as $arg ) {
+			if ( "--{$key}" === $arg || 0 === strpos( $arg, "--{$key}=" ) ) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private static function normalize_license_identifier( $license ) {
+		return strtolower( trim( (string) $license ) );
+	}
+
+	private static function should_skip_license( $license ) {
+		return in_array( self::normalize_license_identifier( $license ), [ 'none', 'proprietary' ], true );
+	}
+
+	private function delete_file( $filename ) {
+		if ( ! file_exists( $filename ) ) {
+			return false;
+		}
+
+		if ( ! unlink( $filename ) ) {
+			WP_CLI::error( "Error deleting file: $filename" );
+		}
+
+		return true;
 	}
 
 	private function prompt_if_files_will_be_overwritten( $filename, $force ) {

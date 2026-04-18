@@ -294,6 +294,41 @@ Feature: Scaffold a README.md file for an existing package
       *This README.md is generated dynamically from the project's codebase
       """
 
+  Scenario: Scaffold a readme regenerates LICENSE from composer.json
+    Given an empty directory
+
+    When I run `wp scaffold package wp-cli/license-refresh --dir=foo --skip-tests --skip-github --skip-install --skip-readme --license=GPL-2.0`
+    Then the foo/LICENSE file should exist
+    And the foo/LICENSE file should contain:
+      """
+      GNU GENERAL PUBLIC LICENSE
+      """
+
+    When I run `wp scaffold package-readme foo --force`
+    Then the foo/README.md file should exist
+    And the foo/LICENSE file should exist
+    And the foo/LICENSE file should contain:
+      """
+      GNU GENERAL PUBLIC LICENSE
+      """
+    And the foo/README.md file should contain:
+      """
+      This project is licensed under the GPL-2.0 License. See the [LICENSE](LICENSE) file for details.
+      """
+
+  Scenario: Scaffold a readme removes LICENSE when requested
+    Given an empty directory
+
+    When I run `wp scaffold package wp-cli/license-none --dir=foo --skip-tests --skip-github --skip-install --license=MIT`
+    Then the foo/LICENSE file should exist
+
+    When I run `wp scaffold package-readme foo --force --license=none`
+    Then the foo/LICENSE file should not exist
+    And the foo/README.md file should contain:
+      """
+      This project does not currently include a license file.
+      """
+
   Scenario: Error when commands are specified but not present
     Given an empty directory
     And a foo/composer.json file:
