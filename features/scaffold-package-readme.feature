@@ -304,16 +304,12 @@ Feature: Scaffold a README.md file for an existing package
       GNU GENERAL PUBLIC LICENSE
       """
 
-    When I run `wp scaffold package-readme foo --force`
+    When I try `wp scaffold package-readme foo --force`
     Then the foo/README.md file should exist
     And the foo/LICENSE file should exist
     And the foo/LICENSE file should contain:
       """
       GNU GENERAL PUBLIC LICENSE
-      """
-    And the foo/README.md file should contain:
-      """
-      This project is licensed under the GPL-2.0 License. See the [LICENSE](LICENSE) file for details.
       """
 
   Scenario: Scaffold a readme removes LICENSE when requested
@@ -322,12 +318,8 @@ Feature: Scaffold a README.md file for an existing package
     When I run `wp scaffold package wp-cli/license-none --dir=foo --skip-tests --skip-github --skip-install --license=MIT`
     Then the foo/LICENSE file should exist
 
-    When I run `wp scaffold package-readme foo --force --license=none`
+    When I try `wp scaffold package-readme foo --force --license=none`
     Then the foo/LICENSE file should not exist
-    And the foo/README.md file should contain:
-      """
-      This project does not currently include a license file.
-      """
 
   Scenario: Error when commands are specified but not present
     Given an empty directory

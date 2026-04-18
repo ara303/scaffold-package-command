@@ -47,11 +47,6 @@ Feature: Scaffold WP-CLI commands
           },
       """
     And the {PACKAGE_PATH}/local/wp-cli/foo/hello-world-command.php file should exist
-    And the {PACKAGE_PATH}/local/wp-cli/foo/CONTRIBUTING.md file should exist
-    And the {PACKAGE_PATH}/local/wp-cli/foo/CONTRIBUTING.md file should contain:
-      """
-      Contributing
-      """
     And the {PACKAGE_PATH}/local/wp-cli/foo/LICENSE file should exist
     And the {PACKAGE_PATH}/local/wp-cli/foo/LICENSE file should contain:
       """

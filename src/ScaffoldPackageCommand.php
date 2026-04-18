@@ -143,7 +143,7 @@ EOT;
 			$force
 		);
 
-		if ( ! self::should_skip_license( $assoc_args['license'] ) ) {
+		if ( Utils\get_flag_value( $assoc_args, 'skip-readme' ) && ! self::should_skip_license( $assoc_args['license'] ) ) {
 			$files_written = array_merge(
 				$files_written,
 				$this->create_files(
@@ -163,7 +163,7 @@ EOT;
 
 		$force_flag         = $force ? '--force' : '';
 		$quoted_package_dir = escapeshellarg( $package_dir );
-		$license_flag       = '--license=' . escapeshellarg( $assoc_args['license'] );
+		$license_flag       = 'MIT' !== self::normalize_license_identifier( $assoc_args['license'] ) ? ' --license=' . escapeshellarg( $assoc_args['license'] ) : '';
 
 		if ( ! Utils\get_flag_value( $assoc_args, 'skip-tests' ) ) {
 			WP_CLI::runcommand( "scaffold package-tests {$quoted_package_dir} {$force_flag}", array( 'launch' => false ) );
@@ -179,7 +179,7 @@ EOT;
 		}
 
 		if ( ! Utils\get_flag_value( $assoc_args, 'skip-readme' ) ) {
-			WP_CLI::runcommand( "scaffold package-readme {$quoted_package_dir} {$force_flag} {$license_flag}", array( 'launch' => false ) );
+			WP_CLI::runcommand( "scaffold package-readme {$quoted_package_dir} {$force_flag}{$license_flag}", array( 'launch' => false ) );
 		}
 
 		// Display next steps guidance for users.
@@ -542,14 +542,14 @@ EOT;
 		$files_to_create = [
 			"{$package_dir}/README.md" => Utils\mustache_render( "{$template_path}/readme.mustache", $readme_args ),
 		];
-		if ( ! self::should_skip_license( $license ) ) {
-			$files_to_create["{$package_dir}/LICENSE"] = $this->render_license_template( $template_path, $license, $this->get_license_template_args( $composer_obj['name'], $composer_obj ) );
+		if ( ! self::should_skip_license( $readme_args['license'] ) ) {
+			$files_to_create["{$package_dir}/LICENSE"] = $this->render_license_template( $template_path, $readme_args['license'], $this->get_license_template_args( $composer_obj['name'], $composer_obj ) );
 		}
 
 		$files_written = $this->create_files( $files_to_create, $force );
 		$license_path  = "{$package_dir}/LICENSE";
 		$license_deleted = false;
-		if ( self::should_skip_license( $license ) ) {
+		if ( self::should_skip_license( $readme_args['license'] ) ) {
 			$license_deleted = $this->delete_file( $license_path );
 		}
 
